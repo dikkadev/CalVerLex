@@ -1,0 +1,24 @@
+name: 'CalVerLex'
+description: 'Generate unbounded CalVer (YYWWD + lex suffix)'
+inputs:
+  github_token:
+    description: 'GitHub token for API calls'
+    required: true
+  repository:
+    description: 'Owner/repo (default: ${{ github.repository }})'
+    required: false
+    default: '${{ github.repository }}'
+  year_format:
+    description: 'Digits of year: 2 or 4'
+    required: false
+    default: '2'
+  current_version:
+    description: 'If set, use this as the current latest version (format: YYWWDx) to increment from instead of API lookup'
+    required: false
+    default: ''
+outputs:
+  tag:
+    description: 'Generated CalVerLex tag'
+runs:
+  using: 'node20'
+  main: 'src/index.js' 
