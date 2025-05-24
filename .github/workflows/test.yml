@@ -25,33 +25,18 @@ jobs:
         run: |
           echo "Generated tag: ${{ steps.test-basic.outputs.tag }}"
           
-          # Calculate expected date prefix (matching the action's logic)
+          # Calculate expected full tag (should be today's date + suffix 'a')
           year=$(date -u +%y)
-          
-          # ISO week calculation (matching action logic)
-          current_date=$(date -u +%Y-%m-%d)
-          week=$(date -d "$current_date" +%V)
+          week=$(date -u +%V)
           day=$(date -u +%u)
+          expected_tag="${year}$(printf "%02d" $week)${day}a"
+          echo "Expected tag: $expected_tag"
           
-          expected_prefix="${year}$(printf "%02d" $week)${day}"
-          echo "Expected date prefix: $expected_prefix"
-          
-          # Validate format and date prefix
-          if [[ "${{ steps.test-basic.outputs.tag }}" =~ ^[0-9]{2}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
-            echo "✅ Tag format is valid"
-            
-            # Extract and validate date prefix
-            actual_prefix="${{ steps.test-basic.outputs.tag }}"
-            actual_prefix="${actual_prefix%[a-z]*}"
-            
-            if [ "$actual_prefix" = "$expected_prefix" ]; then
-              echo "✅ Date prefix is correct: $actual_prefix"
-            else
-              echo "❌ Date prefix mismatch. Expected: $expected_prefix, Got: $actual_prefix"
-              exit 1
-            fi
+          # Validate the complete tag
+          if [ "${{ steps.test-basic.outputs.tag }}" = "$expected_tag" ]; then
+            echo "✅ Generated tag matches expected: $expected_tag"
           else
-            echo "❌ Tag format is invalid: ${{ steps.test-basic.outputs.tag }}"
+            echo "❌ Tag mismatch. Expected: $expected_tag, Got: ${{ steps.test-basic.outputs.tag }}"
             exit 1
           fi
 
@@ -126,29 +111,18 @@ jobs:
         run: |
           echo "Generated tag: ${{ steps.test-4digit.outputs.tag }}"
           
-          # Calculate expected 4-digit year date prefix
+          # Calculate expected full 4-digit year tag (should be today's date + suffix 'a')
           year=$(date -u +%Y)
           week=$(date -u +%V)
           day=$(date -u +%u)
-          expected_prefix="${year}$(printf "%02d" $week)${day}"
-          echo "Expected 4-digit date prefix: $expected_prefix"
+          expected_tag="${year}$(printf "%02d" $week)${day}a"
+          echo "Expected 4-digit tag: $expected_tag"
           
-          # Validate format and date prefix
-          if [[ "${{ steps.test-4digit.outputs.tag }}" =~ ^[0-9]{4}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
-            echo "✅ 4-digit year format is valid"
-            
-            # Extract and validate date prefix
-            actual_prefix="${{ steps.test-4digit.outputs.tag }}"
-            actual_prefix="${actual_prefix%[a-z]*}"
-            
-            if [ "$actual_prefix" = "$expected_prefix" ]; then
-              echo "✅ 4-digit date prefix is correct: $actual_prefix"
-            else
-              echo "❌ 4-digit date prefix mismatch. Expected: $expected_prefix, Got: $actual_prefix"
-              exit 1
-            fi
+          # Validate the complete tag
+          if [ "${{ steps.test-4digit.outputs.tag }}" = "$expected_tag" ]; then
+            echo "✅ Generated 4-digit tag matches expected: $expected_tag"
           else
-            echo "❌ 4-digit year format is invalid: ${{ steps.test-4digit.outputs.tag }}"
+            echo "❌ 4-digit tag mismatch. Expected: $expected_tag, Got: ${{ steps.test-4digit.outputs.tag }}"
             exit 1
           fi
 
