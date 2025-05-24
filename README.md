@@ -213,18 +213,47 @@ Test the full workflow:
 node test/integration-tests.js
 ```
 
-### Using act
+### Local Testing
 
-Test the GitHub Action locally with [act](https://github.com/nektos/act):
+The best way to test the action is using our local testing script:
 
 ```bash
-# Install act
-brew install act  # macOS
-# or see: https://github.com/nektos/act#installation
-
-# Run the test workflow
-act workflow_dispatch --secret GITHUB_TOKEN=your_token
+# Run comprehensive local tests
+./test/test-local.sh
 ```
+
+Or test manually with environment variables:
+
+```bash
+# Basic test
+export INPUT_GITHUB_TOKEN="your_token"
+export INPUT_REPOSITORY="owner/repo"
+node src/index.js
+
+# Test with current version
+export INPUT_GITHUB_TOKEN="your_token"
+export INPUT_REPOSITORY="owner/repo"
+export INPUT_CURRENT_VERSION="25001a"
+node src/index.js
+
+# Test with 4-digit year
+export INPUT_GITHUB_TOKEN="your_token"
+export INPUT_REPOSITORY="owner/repo"
+export INPUT_YEAR_FORMAT="4"
+node src/index.js
+```
+
+### GitHub Actions Testing
+
+The action includes comprehensive tests that run on every push:
+
+- **Basic functionality** - Tests default behavior
+- **Current version override** - Tests manual version specification
+- **4-digit year format** - Tests year format options
+- **Error handling** - Tests invalid input handling
+- **Sequential runs** - Tests multiple runs with incrementing
+
+These tests run automatically and validate the action's output format and behavior.
 
 ## Implementation Details
 

@@ -1,0 +1,170 @@
+name: Test CalVerLex Action
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test-basic:
+    runs-on: ubuntu-latest
+    name: Test Basic Functionality
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test CalVerLex - Basic
+        id: test-basic
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Validate Output
+        run: |
+          echo "Generated tag: ${{ steps.test-basic.outputs.tag }}"
+          # Basic validation - should match pattern like 25001a or 2025001a
+          if [[ "${{ steps.test-basic.outputs.tag }}" =~ ^[0-9]{2,4}[0-9]{3}[1-7][a-z]+$ ]]; then
+            echo "✅ Tag format is valid"
+          else
+            echo "❌ Tag format is invalid: ${{ steps.test-basic.outputs.tag }}"
+            exit 1
+          fi
+
+  test-with-current-version:
+    runs-on: ubuntu-latest
+    name: Test With Current Version Override
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test CalVerLex - With Current Version
+        id: test-current
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          current_version: "25001a"
+      
+      - name: Validate Output
+        run: |
+          echo "Generated tag: ${{ steps.test-current.outputs.tag }}"
+          # Should be next in sequence (25001b or next day)
+          if [[ "${{ steps.test-current.outputs.tag }}" =~ ^[0-9]{2,4}[0-9]{3}[1-7][a-z]+$ ]]; then
+            echo "✅ Tag format is valid"
+          else
+            echo "❌ Tag format is invalid: ${{ steps.test-current.outputs.tag }}"
+            exit 1
+          fi
+
+  test-four-digit-year:
+    runs-on: ubuntu-latest
+    name: Test 4-Digit Year Format
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test CalVerLex - 4-Digit Year
+        id: test-4digit
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          year_format: "4"
+      
+      - name: Validate Output
+        run: |
+          echo "Generated tag: ${{ steps.test-4digit.outputs.tag }}"
+          # Should be 4-digit year format
+          if [[ "${{ steps.test-4digit.outputs.tag }}" =~ ^[0-9]{4}[0-9]{3}[1-7][a-z]+$ ]]; then
+            echo "✅ 4-digit year format is valid"
+          else
+            echo "❌ 4-digit year format is invalid: ${{ steps.test-4digit.outputs.tag }}"
+            exit 1
+          fi
+
+  test-error-handling:
+    runs-on: ubuntu-latest
+    name: Test Error Handling
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test CalVerLex - Invalid Current Version
+        id: test-invalid
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          current_version: "invalid"
+        continue-on-error: true
+      
+      - name: Validate Error Handling
+        run: |
+          if [ "${{ steps.test-invalid.outcome }}" = "failure" ]; then
+            echo "✅ Error handling works correctly"
+          else
+            echo "❌ Error handling failed - should have failed with invalid current_version"
+            exit 1
+          fi
+
+  test-multiple-runs:
+    runs-on: ubuntu-latest
+    name: Test Multiple Sequential Runs
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: First Run
+        id: first-run
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Second Run (should increment suffix)
+        id: second-run
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          current_version: ${{ steps.first-run.outputs.tag }}
+      
+      - name: Validate Sequential Runs
+        run: |
+          echo "First tag: ${{ steps.first-run.outputs.tag }}"
+          echo "Second tag: ${{ steps.second-run.outputs.tag }}"
+          
+          # Extract prefix and suffix from both tags
+          first_tag="${{ steps.first-run.outputs.tag }}"
+          second_tag="${{ steps.second-run.outputs.tag }}"
+          
+          # Basic validation that they're different
+          if [ "$first_tag" != "$second_tag" ]; then
+            echo "✅ Sequential runs produce different tags"
+          else
+            echo "❌ Sequential runs should produce different tags"
+            exit 1
+          fi
+
+  summary:
+    runs-on: ubuntu-latest
+    name: Test Summary
+    needs: [test-basic, test-with-current-version, test-four-digit-year, test-error-handling, test-multiple-runs]
+    if: always()
+    steps:
+      - name: Test Results Summary
+        run: |
+          echo "## CalVerLex Action Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Basic Functionality | ${{ needs.test-basic.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Current Version Override | ${{ needs.test-with-current-version.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 4-Digit Year Format | ${{ needs.test-four-digit-year.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Error Handling | ${{ needs.test-error-handling.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Multiple Sequential Runs | ${{ needs.test-multiple-runs.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          # Fail if any required tests failed (excluding error handling which should fail)
+          if [[ "${{ needs.test-basic.result }}" != "success" || 
+                "${{ needs.test-with-current-version.result }}" != "success" || 
+                "${{ needs.test-four-digit-year.result }}" != "success" || 
+                "${{ needs.test-multiple-runs.result }}" != "success" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Some tests failed!**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **All tests passed!**" >> $GITHUB_STEP_SUMMARY
+          fi 
