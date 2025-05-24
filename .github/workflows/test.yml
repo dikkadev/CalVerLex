@@ -24,10 +24,32 @@ jobs:
       - name: Validate Output
         run: |
           echo "Generated tag: ${{ steps.test-basic.outputs.tag }}"
-          # Basic validation - should match pattern like 25216a (YYWWD + suffix)
-          # Year: 2 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          
+          # Calculate expected date prefix (matching the action's logic)
+          year=$(date -u +%y)
+          
+          # ISO week calculation (matching action logic)
+          current_date=$(date -u +%Y-%m-%d)
+          week=$(date -d "$current_date" +%V)
+          day=$(date -u +%u)
+          
+          expected_prefix="${year}$(printf "%02d" $week)${day}"
+          echo "Expected date prefix: $expected_prefix"
+          
+          # Validate format and date prefix
           if [[ "${{ steps.test-basic.outputs.tag }}" =~ ^[0-9]{2}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ Tag format is valid"
+            
+            # Extract and validate date prefix
+            actual_prefix="${{ steps.test-basic.outputs.tag }}"
+            actual_prefix="${actual_prefix%[a-z]*}"
+            
+            if [ "$actual_prefix" = "$expected_prefix" ]; then
+              echo "✅ Date prefix is correct: $actual_prefix"
+            else
+              echo "❌ Date prefix mismatch. Expected: $expected_prefix, Got: $actual_prefix"
+              exit 1
+            fi
           else
             echo "❌ Tag format is invalid: ${{ steps.test-basic.outputs.tag }}"
             exit 1
@@ -39,21 +61,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Calculate current date version
+        id: calc-version
+        run: |
+          # Calculate today's prefix with suffix 'a'
+          year=$(date -u +%y)
+          week=$(date -u +%V)
+          day=$(date -u +%u)
+          current_version="${year}$(printf "%02d" $week)${day}a"
+          echo "current_version=$current_version" >> $GITHUB_OUTPUT
+          echo "Expected current version: $current_version"
+      
       - name: Test CalVerLex - With Current Version
         id: test-current
         uses: ./
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          current_version: "25001a"
+          current_version: ${{ steps.calc-version.outputs.current_version }}
       
       - name: Validate Output
         run: |
           echo "Generated tag: ${{ steps.test-current.outputs.tag }}"
-          # Should be next in sequence (25216b or next day)
-          # Year: 2 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          echo "Input current version: ${{ steps.calc-version.outputs.current_version }}"
+          
+          # Calculate expected next version (should be 'b' suffix)
+          year=$(date -u +%y)
+          week=$(date -u +%V)
+          day=$(date -u +%u)
+          expected_tag="${year}$(printf "%02d" $week)${day}b"
+          echo "Expected tag: $expected_tag"
+          
+          # Validate format
           if [[ "${{ steps.test-current.outputs.tag }}" =~ ^[0-9]{2}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ Tag format is valid"
+            
+            # Validate that it's the expected next version
+            if [ "${{ steps.test-current.outputs.tag }}" = "$expected_tag" ]; then
+              echo "✅ Correct suffix increment: a → b"
+            else
+              echo "❌ Incorrect suffix increment. Expected: $expected_tag, Got: ${{ steps.test-current.outputs.tag }}"
+              exit 1
+            fi
           else
             echo "❌ Tag format is invalid: ${{ steps.test-current.outputs.tag }}"
             exit 1
@@ -76,10 +125,28 @@ jobs:
       - name: Validate Output
         run: |
           echo "Generated tag: ${{ steps.test-4digit.outputs.tag }}"
-          # Should be 4-digit year format like 2025216a (YYYYWWD + suffix)
-          # Year: 4 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          
+          # Calculate expected 4-digit year date prefix
+          year=$(date -u +%Y)
+          week=$(date -u +%V)
+          day=$(date -u +%u)
+          expected_prefix="${year}$(printf "%02d" $week)${day}"
+          echo "Expected 4-digit date prefix: $expected_prefix"
+          
+          # Validate format and date prefix
           if [[ "${{ steps.test-4digit.outputs.tag }}" =~ ^[0-9]{4}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ 4-digit year format is valid"
+            
+            # Extract and validate date prefix
+            actual_prefix="${{ steps.test-4digit.outputs.tag }}"
+            actual_prefix="${actual_prefix%[a-z]*}"
+            
+            if [ "$actual_prefix" = "$expected_prefix" ]; then
+              echo "✅ 4-digit date prefix is correct: $actual_prefix"
+            else
+              echo "❌ 4-digit date prefix mismatch. Expected: $expected_prefix, Got: $actual_prefix"
+              exit 1
+            fi
           else
             echo "❌ 4-digit year format is invalid: ${{ steps.test-4digit.outputs.tag }}"
             exit 1
@@ -139,18 +206,82 @@ jobs:
           first_tag="${{ steps.first-run.outputs.tag }}"
           second_tag="${{ steps.second-run.outputs.tag }}"
           
-          # Basic validation that they're different
-          if [ "$first_tag" != "$second_tag" ]; then
-            echo "✅ Sequential runs produce different tags"
+          # Extract date prefix (everything before letters)
+          first_prefix="${first_tag%[a-z]*}"
+          second_prefix="${second_tag%[a-z]*}"
+          
+          # Extract suffix (letters only)
+          first_suffix="${first_tag#${first_prefix}}"
+          second_suffix="${second_tag#${second_prefix}}"
+          
+          echo "First: prefix=$first_prefix, suffix=$first_suffix"
+          echo "Second: prefix=$second_prefix, suffix=$second_suffix"
+          
+          # Validate they have the same date prefix (same day)
+          if [ "$first_prefix" = "$second_prefix" ]; then
+            echo "✅ Same date prefix: $first_prefix"
+            
+            # Validate suffix increment (should be a → b)
+            if [ "$first_suffix" = "a" ] && [ "$second_suffix" = "b" ]; then
+              echo "✅ Correct suffix sequence: a → b"
+            else
+              echo "❌ Incorrect suffix sequence. Expected: a → b, Got: $first_suffix → $second_suffix"
+              exit 1
+            fi
           else
-            echo "❌ Sequential runs should produce different tags"
+            echo "❌ Different date prefixes. Expected same day. First: $first_prefix, Second: $second_prefix"
+            exit 1
+          fi
+
+  test-suffix-boundary:
+    runs-on: ubuntu-latest
+    name: Test Suffix Boundary (z → aa)
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Calculate current date with z suffix
+        id: calc-z-version
+        run: |
+          # Calculate today's prefix with suffix 'z'
+          year=$(date -u +%y)
+          week=$(date -u +%V)
+          day=$(date -u +%u)
+          z_version="${year}$(printf "%02d" $week)${day}z"
+          echo "z_version=$z_version" >> $GITHUB_OUTPUT
+          echo "Testing boundary with: $z_version"
+      
+      - name: Test CalVerLex - z to aa boundary
+        id: test-boundary
+        uses: ./
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          current_version: ${{ steps.calc-z-version.outputs.z_version }}
+      
+      - name: Validate Boundary Increment
+        run: |
+          echo "Input version: ${{ steps.calc-z-version.outputs.z_version }}"
+          echo "Generated tag: ${{ steps.test-boundary.outputs.tag }}"
+          
+          # Calculate expected next version (should be 'aa' suffix)
+          year=$(date -u +%y)
+          week=$(date -u +%V)
+          day=$(date -u +%u)
+          expected_tag="${year}$(printf "%02d" $week)${day}aa"
+          echo "Expected tag: $expected_tag"
+          
+          # Validate that z → aa boundary works correctly
+          if [ "${{ steps.test-boundary.outputs.tag }}" = "$expected_tag" ]; then
+            echo "✅ Correct boundary increment: z → aa"
+          else
+            echo "❌ Incorrect boundary increment. Expected: $expected_tag, Got: ${{ steps.test-boundary.outputs.tag }}"
             exit 1
           fi
 
   summary:
     runs-on: ubuntu-latest
     name: Test Summary
-    needs: [test-basic, test-with-current-version, test-four-digit-year, test-error-handling, test-multiple-runs]
+    needs: [test-basic, test-with-current-version, test-four-digit-year, test-error-handling, test-multiple-runs, test-suffix-boundary]
     if: always()
     steps:
       - name: Test Results Summary
@@ -164,12 +295,14 @@ jobs:
           echo "| 4-Digit Year Format | ${{ needs.test-four-digit-year.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Error Handling | ${{ needs.test-error-handling.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Multiple Sequential Runs | ${{ needs.test-multiple-runs.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Suffix Boundary (z→aa) | ${{ needs.test-suffix-boundary.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           
           # Fail if any required tests failed (excluding error handling which should fail)
           if [[ "${{ needs.test-basic.result }}" != "success" || 
                 "${{ needs.test-with-current-version.result }}" != "success" || 
                 "${{ needs.test-four-digit-year.result }}" != "success" || 
-                "${{ needs.test-multiple-runs.result }}" != "success" ]]; then
+                "${{ needs.test-multiple-runs.result }}" != "success" ||
+                "${{ needs.test-suffix-boundary.result }}" != "success" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Some tests failed!**" >> $GITHUB_STEP_SUMMARY
             exit 1
