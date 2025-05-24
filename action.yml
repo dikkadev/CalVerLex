@@ -5,9 +5,8 @@ inputs:
     description: 'GitHub token for API calls'
     required: true
   repository:
-    description: 'Owner/repo (default: ${{ github.repository }})'
+    description: 'Owner/repo (format: owner/repo)'
     required: false
-    default: '${{ github.repository }}'
   year_format:
     description: 'Digits of year: 2 or 4'
     required: false
