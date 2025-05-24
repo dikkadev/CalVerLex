@@ -25,7 +25,8 @@ jobs:
         run: |
           echo "Generated tag: ${{ steps.test-basic.outputs.tag }}"
           # Basic validation - should match pattern like 25216a (YYWWD + suffix)
-          if [[ "${{ steps.test-basic.outputs.tag }}" =~ ^[0-9]{2}[0-9]{2}[1-7][a-z]+$ ]]; then
+          # Year: 2 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          if [[ "${{ steps.test-basic.outputs.tag }}" =~ ^[0-9]{2}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ Tag format is valid"
           else
             echo "❌ Tag format is invalid: ${{ steps.test-basic.outputs.tag }}"
@@ -50,7 +51,8 @@ jobs:
         run: |
           echo "Generated tag: ${{ steps.test-current.outputs.tag }}"
           # Should be next in sequence (25216b or next day)
-          if [[ "${{ steps.test-current.outputs.tag }}" =~ ^[0-9]{2}[0-9]{2}[1-7][a-z]+$ ]]; then
+          # Year: 2 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          if [[ "${{ steps.test-current.outputs.tag }}" =~ ^[0-9]{2}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ Tag format is valid"
           else
             echo "❌ Tag format is invalid: ${{ steps.test-current.outputs.tag }}"
@@ -75,7 +77,8 @@ jobs:
         run: |
           echo "Generated tag: ${{ steps.test-4digit.outputs.tag }}"
           # Should be 4-digit year format like 2025216a (YYYYWWD + suffix)
-          if [[ "${{ steps.test-4digit.outputs.tag }}" =~ ^[0-9]{4}[0-9]{2}[1-7][a-z]+$ ]]; then
+          # Year: 4 digits, Week: 01-53, Day: 1-7, Suffix: a-z+
+          if [[ "${{ steps.test-4digit.outputs.tag }}" =~ ^[0-9]{4}(0[1-9]|[1-4][0-9]|5[0-3])[1-7][a-z]+$ ]]; then
             echo "✅ 4-digit year format is valid"
           else
             echo "❌ 4-digit year format is invalid: ${{ steps.test-4digit.outputs.tag }}"

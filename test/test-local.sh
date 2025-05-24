@@ -43,13 +43,41 @@ run_test() {
     export INPUT_YEAR_FORMAT="${env_vars[YEAR_FORMAT]:-2}"
     export INPUT_CURRENT_VERSION="${env_vars[CURRENT_VERSION]:-}"
     
+    # Clear previous output
+    > "$GITHUB_OUTPUT"
+    
     # Run the action
     echo "Running: node src/index.js"
     if output=$(node src/index.js 2>&1); then
-        echo -e "${GREEN}✅ Test passed${NC}"
-        echo "Output: $output"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        return 0
+        # Read the generated tag from GITHUB_OUTPUT
+        if [ -f "$GITHUB_OUTPUT" ]; then
+            tag=$(grep "^tag=" "$GITHUB_OUTPUT" | cut -d'=' -f2)
+            if [ -n "$tag" ]; then
+                echo -e "${GREEN}✅ Test passed${NC}"
+                echo "Generated tag: $tag"
+                echo "Output: $output"
+                
+                # Basic format validation
+                if [[ "$tag" =~ ^[0-9]{4,7}[1-7][a-z]+$ ]]; then
+                    echo "✓ Tag format is valid"
+                else
+                    echo "⚠ Warning: Tag format might be invalid: $tag"
+                fi
+                
+                TESTS_PASSED=$((TESTS_PASSED + 1))
+                return 0
+            else
+                echo -e "${RED}❌ Test failed - no tag generated${NC}"
+                echo "Output: $output"
+                TESTS_FAILED=$((TESTS_FAILED + 1))
+                return 1
+            fi
+        else
+            echo -e "${RED}❌ Test failed - no output file${NC}"
+            echo "Output: $output"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            return 1
+        fi
     else
         echo -e "${RED}❌ Test failed${NC}"
         echo "Error: $output"
@@ -65,6 +93,18 @@ if [ ! -f "src/index.js" ]; then
     echo -e "${RED}❌ Error: src/index.js not found. Please run from project root.${NC}"
     exit 1
 fi
+
+# Create temporary output file for GitHub Actions compatibility
+export GITHUB_OUTPUT=$(mktemp)
+echo "Using temporary GITHUB_OUTPUT: $GITHUB_OUTPUT"
+
+# Cleanup function
+cleanup() {
+    if [ -f "$GITHUB_OUTPUT" ]; then
+        rm -f "$GITHUB_OUTPUT"
+    fi
+}
+trap cleanup EXIT
 
 echo -e "${GREEN}✅ Environment ready${NC}"
 
@@ -82,6 +122,9 @@ run_test "Current version override" \
 # Test 4: Invalid current version (should fail)
 echo -e "\n${YELLOW}🧪 Test: Invalid current version (should fail)${NC}"
 TESTS_RUN=$((TESTS_RUN + 1))
+
+# Clear previous output
+> "$GITHUB_OUTPUT"
 
 export INPUT_GITHUB_TOKEN="fake_token_for_testing"
 export INPUT_REPOSITORY="test/repo"
