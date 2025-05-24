@@ -96,12 +96,12 @@
           const nextSuffix = numberToSuffix(nextNum);
           const tag = prefix + nextSuffix;
           logInfo(`Incremented suffix from ${currentSuffix} to ${nextSuffix}`);
-          console.log(`::set-output name=tag::${tag}`);
+          require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
         } else {
           // Different date, start with 'a'
           const tag = prefix + 'a';
           logInfo(`Date changed from ${currentPrefix} to ${prefix}, starting with suffix 'a'`);
-          console.log(`::set-output name=tag::${tag}`);
+          require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
         }
       } catch (error) {
         throw new Error(`Failed to parse current version: ${error.message}`);
@@ -157,7 +157,7 @@
 
     if (!apiSuccess) {
       logInfo('Could not fetch tags from API, starting with suffix "a"');
-      console.log(`::set-output name=tag::${prefix}a`);
+      require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `tag=${prefix}a\n`);
       return;
     }
 
@@ -192,7 +192,7 @@
       logInfo(`No existing tags found for today, starting with ${suffix}`);
     }
 
-    console.log(`::set-output name=tag::${tag}`);
+    require('fs').appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
 
   } catch (error) {
     console.error(`::error::CalVerLex failed: ${error.message}`);
