@@ -19,7 +19,7 @@ CalVerLex uses a date-based prefix followed by a lexical suffix:
 |------|------|-----|--------------|--------------|---------------|----------------|--------------|
 | 2025-01-20 | 4 | 1 (Mon) | `25041a` | `2025041a` | `25041a` | `25041b` | `25041aa` |
 | 2025-01-21 | 4 | 2 (Tue) | `25042a` | `2025042a` | `25042a` | `25042b` | `25042aa` |
-| 2025-05-26 | 22 | 1 (Mon) | `25221a` | `2025221a` | `25221a` | `25221b` | `25221aa` |
+| 2025-12-29 | 1 | 1 (Mon) | `25011a` | `2025011a` | `25011a` | `25011b` | `25011aa` |
 
 ### Lexical Suffix Sequence
 
@@ -119,11 +119,11 @@ jobs:
 When you need to specify the current version manually (useful for testing or when API access is limited):
 
 ```yaml
-- name: Generate next version
+- name: Generate next version from z to aa
   uses: dikkadev/CalVerLex@main
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
-    current_version: '25041z'  # Will generate 25041aa (same day - z → aa boundary)
+    current_version: '25041z'  # Will generate 25041aa (same day) or 25042a (different day)
 ```
 
 ### 4-Digit Year Format
@@ -164,10 +164,10 @@ If GitHub API is unavailable, the action falls back to suffix 'a':
 
 ### Year Boundaries
 
-CalVerLex handles year transitions correctly using ISO week numbering:
-- Last week of 2024: `24531a` (week 53, if exists)
-- First week of 2025: `25011a` (week 1)
-- Week 1 contains January 4th of the year
+CalVerLex handles year transitions correctly using ISO week numbers:
+- December dates can be part of the next year's week 1
+- January dates can be part of the previous year's last week
+- The action always uses the ISO week year, not calendar year
 
 ### Invalid Tags
 
@@ -184,6 +184,42 @@ The action provides clear error messages for common issues:
 - **Invalid current_version**: `Invalid version format: abc. Expected format: YYWWDx (e.g., 25216a)`
 - **API errors**: Logs debug information and falls back gracefully
 
+## Parsing
+
+### Known Year Format
+
+If you know whether the tag uses 2-digit or 4-digit year format, parsing is trivial from front to back.
+
+### Unknown Year Format
+
+When the year format is unknown, parsing from the back is not much more complex:
+
+```pseudo
+function parseCalVerLex(tag):
+    i = tag.length - 1
+    suffix = ""
+    
+    // Iterate from back collecting all letters (suffix)
+    while i >= 0 and tag[i] is letter:
+        suffix = tag[i] + suffix
+        i = i - 1
+    
+    // Take single digit (day)
+    day = tag[i]
+    i = i - 1
+    
+    // Take 2 digits (week)
+    week = tag[i-1] + tag[i]
+    i = i - 2
+    
+    // Remaining digits are year
+    year = tag[0..i]
+    
+    return {year, week, day, suffix}
+```
+
+The lexical suffix always consists of lowercase letters `[a-z]+`, making it easy to identify the boundary between date and suffix components.
+
 ## Testing
 
 ### Local Testing
@@ -191,121 +227,60 @@ The action provides clear error messages for common issues:
 Test the action locally before pushing:
 
 ```bash
-# Set up required environment
-export GITHUB_OUTPUT=$(mktemp)  # Required for action output
-export INPUT_GITHUB_TOKEN="your_token"
-export INPUT_REPOSITORY="owner/repo"
-export INPUT_CURRENT_VERSION="25041a"
-
-# Run the action
-node src/index.js
-
-# Check the output
-cat $GITHUB_OUTPUT
-```
-
-### Unit Tests
-
-Run comprehensive unit tests:
-
-```bash
-node test/unit-tests.js
-```
-
-### All Tests
-
-Run all tests at once:
-
-```bash
-node test/run-all-tests.js
-```
-
-### Local Testing
-
-The best way to test the action is using our local testing script:
-
-```bash
-# Run comprehensive local tests
-./test/test-local.sh
-```
-
-Or test manually with environment variables:
-
-```bash
-# Set up required environment (needed for all tests)
-export GITHUB_OUTPUT=$(mktemp)
+# Set up required environment variables
+export GITHUB_OUTPUT=$(mktemp)  # Required for local testing
 export INPUT_GITHUB_TOKEN="your_token"
 export INPUT_REPOSITORY="owner/repo"
 
 # Basic test
 node src/index.js
-cat $GITHUB_OUTPUT
 
-# Test with current version
-export INPUT_CURRENT_VERSION="25001a"
+# Test with current version override
+export INPUT_CURRENT_VERSION="25041a"
 node src/index.js
-cat $GITHUB_OUTPUT
 
 # Test with 4-digit year
-unset INPUT_CURRENT_VERSION
 export INPUT_YEAR_FORMAT="4"
 node src/index.js
-cat $GITHUB_OUTPUT
+
+# Clean up
+rm -f "$GITHUB_OUTPUT"
+```
+
+### Automated Testing Script
+
+Use the provided testing script for comprehensive local validation:
+
+```bash
+# Run all local tests with proper environment setup
+./test/test-local.sh
+```
+
+### Unit Tests
+
+Run comprehensive unit tests that validate the core mathematical functions:
+
+```bash
+node test/unit-tests.js
 ```
 
 ### GitHub Actions Testing
 
-The action includes comprehensive tests that run on every push:
+The action includes comprehensive integration tests that run on every push:
 
-- **Basic functionality** - Tests default behavior
-- **Current version override** - Tests manual version specification
-- **4-digit year format** - Tests year format options
+- **Basic functionality** - Tests default behavior with today's date
+- **Current version override** - Tests manual version specification and suffix increment
+- **4-digit year format** - Tests year format options with full date validation
 - **Error handling** - Tests invalid input handling
-- **Sequential runs** - Tests multiple runs with incrementing
+- **Sequential runs** - Tests multiple runs with proper `a → b` incrementing
+- **Suffix boundary** - Tests critical `z → aa` boundary condition
 
-These tests run automatically and validate the action's output format and behavior.
-
-## Implementation Details
-
-### Algorithm
-
-1. **Calculate date prefix**: Current date → `YYWWD` format
-2. **Check for current_version**: If provided, parse and increment
-3. **Fetch existing tags**: Query GitHub API for repository tags
-4. **Filter matching tags**: Find tags with today's prefix + valid suffix
-5. **Find maximum suffix**: Convert suffixes to numbers, find highest
-6. **Generate next suffix**: Increment and convert back to letters
-7. **Output result**: Return complete tag
-
-### Performance
-
-- **Lexical conversion**: Handles up to millions of same-day releases efficiently
-- **API optimization**: Tries multiple endpoints, graceful fallback
-- **Memory efficient**: Uses BigInt for large suffix calculations
-
-### Dependencies
-
-- **Zero external dependencies**: Pure JavaScript implementation
-- **Node.js 20**: Latest LTS runtime for GitHub Actions
-- **Built-in fetch**: Uses native fetch API for GitHub requests
-
-## Comparison with Other Versioning Schemes
-
-| Scheme | Format | Same-day Releases | Sortable | Human Readable |
-|--------|--------|-------------------|----------|----------------|
-| **CalVerLex** | `25041a` | ✅ Unlimited | ✅ Lexicographic | ✅ Date + sequence |
-| CalVer | `2025.01.20` | ❌ One per day | ✅ Numeric | ✅ Date only |
-| SemVer | `1.2.3` | ✅ Unlimited | ✅ Numeric | ❌ No date info |
-| Timestamp | `20250120143022` | ✅ Unlimited | ✅ Numeric | ❌ Precise but cryptic |
+These tests run automatically and validate both the action's output format and correctness of the generated tags.
 
 ## Contributing
 
-1. Run tests: `node test/unit-tests.js && node test/run-all-tests.js`
-2. Test locally: `./test/test-local.sh`
-3. Test with GitHub Actions: `act workflow_dispatch` (requires act)
-4. Follow conventional commits
-5. Update documentation for any API changes
-
-## License
-
-MIT License - see LICENSE file for details.
+1. Fork the repository: https://github.com/dikkadev/CalVerLex
+2. Run tests locally: `node test/unit-tests.js && ./test/test-local.sh`
+3. Follow conventional commits
+4. Update documentation for any API changes
+5. Submit pull request
