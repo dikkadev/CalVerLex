@@ -19,7 +19,7 @@ CalVerLex uses a date-based prefix followed by a lexical suffix:
 |------|------|-----|--------------|--------------|---------------|----------------|--------------|
 | 2025-01-20 | 4 | 1 (Mon) | `25041a` | `2025041a` | `25041a` | `25041b` | `25041aa` |
 | 2025-01-21 | 4 | 2 (Tue) | `25042a` | `2025042a` | `25042a` | `25042b` | `25042aa` |
-| 2025-12-29 | 1 | 1 (Mon) | `25011a` | `2025011a` | `25011a` | `25011b` | `25011aa` |
+| 2025-05-26 | 22 | 1 (Mon) | `25221a` | `2025221a` | `25221a` | `25221b` | `25221aa` |
 
 ### Lexical Suffix Sequence
 
@@ -50,7 +50,7 @@ CalVerLex uses ISO 8601 week numbering:
 ```yaml
 - name: Generate CalVerLex tag
   id: calverlex
-  uses: your-org/calverlex-action@v1
+  uses: dikkadev/CalVerLex@main
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -62,7 +62,7 @@ CalVerLex uses ISO 8601 week numbering:
 
 ```yaml
 - name: Generate CalVerLex tag
-  uses: your-org/calverlex-action@v1
+  uses: dikkadev/CalVerLex@main
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     repository: ${{ github.repository }}     # Optional: defaults to current repo
@@ -103,7 +103,7 @@ jobs:
       
       - name: Generate version tag
         id: version
-        uses: your-org/calverlex-action@v1
+        uses: dikkadev/CalVerLex@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -120,10 +120,10 @@ When you need to specify the current version manually (useful for testing or whe
 
 ```yaml
 - name: Generate next version
-  uses: your-org/calverlex-action@v1
+  uses: dikkadev/CalVerLex@main
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
-    current_version: '25041z'  # Will generate 25041aa (next day) or 25042a (different day)
+    current_version: '25041z'  # Will generate 25041aa (same day - z → aa boundary)
 ```
 
 ### 4-Digit Year Format
@@ -132,7 +132,7 @@ For long-term projects that need year clarity:
 
 ```yaml
 - name: Generate version with full year
-  uses: your-org/calverlex-action@v1
+  uses: dikkadev/CalVerLex@main
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     year_format: '4'
@@ -164,9 +164,10 @@ If GitHub API is unavailable, the action falls back to suffix 'a':
 
 ### Year Boundaries
 
-CalVerLex handles year transitions correctly:
-- Last week of 2024: `24531a` (week 53)
+CalVerLex handles year transitions correctly using ISO week numbering:
+- Last week of 2024: `24531a` (week 53, if exists)
 - First week of 2025: `25011a` (week 1)
+- Week 1 contains January 4th of the year
 
 ### Invalid Tags
 
@@ -190,11 +191,17 @@ The action provides clear error messages for common issues:
 Test the action locally before pushing:
 
 ```bash
-# Test with current version override
+# Set up required environment
+export GITHUB_OUTPUT=$(mktemp)  # Required for action output
 export INPUT_GITHUB_TOKEN="your_token"
 export INPUT_REPOSITORY="owner/repo"
 export INPUT_CURRENT_VERSION="25041a"
+
+# Run the action
 node src/index.js
+
+# Check the output
+cat $GITHUB_OUTPUT
 ```
 
 ### Unit Tests
@@ -205,12 +212,12 @@ Run comprehensive unit tests:
 node test/unit-tests.js
 ```
 
-### Integration Tests
+### All Tests
 
-Test the full workflow:
+Run all tests at once:
 
 ```bash
-node test/integration-tests.js
+node test/run-all-tests.js
 ```
 
 ### Local Testing
@@ -225,22 +232,25 @@ The best way to test the action is using our local testing script:
 Or test manually with environment variables:
 
 ```bash
-# Basic test
+# Set up required environment (needed for all tests)
+export GITHUB_OUTPUT=$(mktemp)
 export INPUT_GITHUB_TOKEN="your_token"
 export INPUT_REPOSITORY="owner/repo"
+
+# Basic test
 node src/index.js
+cat $GITHUB_OUTPUT
 
 # Test with current version
-export INPUT_GITHUB_TOKEN="your_token"
-export INPUT_REPOSITORY="owner/repo"
 export INPUT_CURRENT_VERSION="25001a"
 node src/index.js
+cat $GITHUB_OUTPUT
 
 # Test with 4-digit year
-export INPUT_GITHUB_TOKEN="your_token"
-export INPUT_REPOSITORY="owner/repo"
+unset INPUT_CURRENT_VERSION
 export INPUT_YEAR_FORMAT="4"
 node src/index.js
+cat $GITHUB_OUTPUT
 ```
 
 ### GitHub Actions Testing
@@ -290,10 +300,11 @@ These tests run automatically and validate the action's output format and behavi
 
 ## Contributing
 
-1. Run tests: `node test/unit-tests.js && node test/integration-tests.js`
-2. Test locally with act: `act workflow_dispatch`
-3. Follow conventional commits
-4. Update documentation for any API changes
+1. Run tests: `node test/unit-tests.js && node test/run-all-tests.js`
+2. Test locally: `./test/test-local.sh`
+3. Test with GitHub Actions: `act workflow_dispatch` (requires act)
+4. Follow conventional commits
+5. Update documentation for any API changes
 
 ## License
 
